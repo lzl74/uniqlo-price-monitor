@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>优衣库价格监控</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f2f5; color: #333; }
+.header { background: linear-gradient(135deg, #ff4d4f 0%, #e84040 100%); color: #fff; padding: 20px 0; text-align: center; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+.header h1 { font-size: 22px; font-weight: 600; }
+.container { max-width: 960px; margin: 20px auto; padding: 0 16px; }
+.card { background: #fff; border-radius: 12px; padding: 24px; margin-bottom: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+.card-title { font-size: 16px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+.badge { background: #ff4d4f; color: #fff; font-size: 12px; padding: 2px 8px; border-radius: 10px; }
+.form-row { display: flex; gap: 12px; margin-bottom: 12px; }
+.form-row input, .form-row select { flex: 1; padding: 10px 14px; border: 1px solid #d9d9d9; border-radius: 8px; font-size: 14px; transition: border-color 0.2s; }
+.form-row input:focus, .form-row select:focus { outline: none; border-color: #ff4d4f; box-shadow: 0 0 0 2px rgba(255,77,79,0.1); }
+.btn { padding: 10px 20px; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; transition: all 0.2s; font-weight: 500; }
+.btn-primary { background: #ff4d4f; color: #fff; }
+.btn-primary:hover { background: #e84040; }
+.btn-danger { background: #fff; color: #ff4d4f; border: 1px solid #ff4d4f; }
+.btn-danger:hover { background: #fff1f0; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; padding: 10px 12px; font-size: 13px; color: #8c8c8c; border-bottom: 1px solid #f0f0f0; font-weight: 500; }
+td { padding: 12px; border-bottom: 1px solid #f5f5f5; font-size: 14px; }
+tr:hover { background: #fafafa; }
+.price { font-weight: 700; color: #ff4d4f; font-size: 16px; }
+.price-down { color: #52c41a; }
+.original { color: #8c8c8c; text-decoration: line-through; font-size: 13px; }
+.tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; }
+.tag-active { color: #52c41a; background: #f6ffed; }
+.tag-inactive { color: #8c8c8c; background: #f5f5f5; }
+.tag-limited { color: #ff4d4f; border: 1px solid #ffccc7; background: #fff; }
+.empty { text-align: center; padding: 48px 0; color: #8c8c8c; }
+.empty-icon { font-size: 48px; margin-bottom: 12px; }
+.msg { padding: 10px 16px; border-radius: 8px; margin-bottom: 12px; font-size: 14px; display: none; }
+.msg-ok { background: #f6ffed; color: #52c41a; border: 1px solid #b7eb8f; display: block; }
+.msg-err { background: #fff2f0; color: #ff4d4f; border: 1px solid #ffccc7; display: block; }
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+.stat-card { background: #fff; border-radius: 12px; padding: 16px; text-align: center; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+.stat-value { font-size: 24px; font-weight: 700; color: #ff4d4f; }
+.stat-label { font-size: 12px; color: #8c8c8c; margin-top: 4px; }
+.history-row { display: flex; align-items: center; padding: 8px 0; border-bottom: 1px solid #f5f5f5; font-size: 13px; }
+.history-date { width: 140px; color: #8c8c8c; }
+.history-price { font-weight: 600; }
+.history-low { color: #ff4d4f; }
+@media (max-width: 600px) { .stats { grid-template-columns: repeat(2, 1fr); } .form-row { flex-direction: column; } }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>优衣库价格监控</h1>
+</div>
+
+<div class="container">
+  <!-- 统计 -->
+  <div class="stats" id="stats"></div>
+
+  <!-- 添加商品 -->
+  <div class="card">
+    <div class="card-title">添加商品</div>
+    <div id="msg" class="msg"></div>
+    <div class="form-row">
+      <input type="text" id="inputCode" placeholder="输入优衣库货号，如 483456">
+      <button class="btn btn-primary" id="btnAdd" onclick="addProduct()">查询并添加</button>
+    </div>
+  </div>
+
+  <!-- 监控列表 -->
+  <div class="card">
+    <div class="card-title">监控列表 <span class="badge" id="watchCount">0</span></div>
+    <div id="watchlist"></div>
+  </div>
+
+  <!-- 商品价格记录 -->
+  <div class="card" id="historyCard" style="display:none">
+    <div class="card-title">价格变动记录</div>
+    <div id="history"></div>
+  </div>
+
+  <!-- 操作日志 -->
+  <div class="card">
+    <div class="card-title">操作日志 <button class="btn" style="padding:4px 12px;font-size:12px;border:1px solid #d9d9d9;margin-left:8px" onclick="loadLogs()">刷新</button> <button class="btn" style="padding:4px 12px;font-size:12px;border:1px solid #ff4d4f;color:#ff4d4f;margin-left:4px" onclick="clearLogs()">清空</button></div>
+    <div id="logs"></div>
+  </div>
+
+  <!-- 数据库管理 -->
+  <div class="card">
+    <div class="card-title">数据库管理 <button class="btn" style="padding:4px 12px;font-size:12px;border:1px solid #d9d9d9;margin-left:8px" onclick="loadDb()">刷新</button></div>
+    <div id="dbSummary" style="margin-bottom:16px;color:#8c8c8c;font-size:13px"></div>
+    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+      <button class="btn" style="border:1px solid #d9d9d9" onclick="showDbTable('products')">商品</button>
+      <button class="btn" style="border:1px solid #d9d9d9" onclick="showDbTable('watch')">监控</button>
+      <button class="btn" style="border:1px solid #d9d9d9" onclick="showDbTable('price_history')">价格历史</button>
+      <button class="btn" style="border:1px solid #d9d9d9" onclick="showDbTable('notifications')">通知记录</button>
+    </div>
+    <div id="dbTable"></div>
+  </div>
+</div>
+
+<script>
+const API = location.origin;
+
+function fmtTime(dateStr) {
+  if (!dateStr) return '-';
+  const d = new Date(dateStr);
+  d.setHours(d.getHours() + 8);
+  return `${d.getUTCMonth()+1}/${d.getUTCDate()} ${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')}:${String(d.getUTCSeconds()).padStart(2,'0')}`;
+}
+
+function fmtTimeShort(dateStr) {
+  if (!dateStr) return '-';
+  const d = new Date(dateStr);
+  d.setHours(d.getHours() + 8);
+  return `${d.getUTCMonth()+1}/${d.getUTCDate()} ${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')}`;
+}
+
+async function load() {
+  try {
+    const [watchRes, prodRes] = await Promise.all([
+      fetch(`${API}/api/watch/list`),
+      fetch(`${API}/api/product/list`),
+    ]);
+    const watches = await watchRes.json();
+    const products = await prodRes.json();
+    renderStats(watches, products);
+    renderWatchList(watches);
+  } catch(e) { console.error(e); }
+}
+
+function renderStats(watches, products) {
+  const el = document.getElementById('stats');
+  const active = watches.filter(w => w.is_active).length;
+  const onSale = products.filter(p => p.is_active).length;
+  el.innerHTML = `
+    <div class="stat-card"><div class="stat-value">${products.length}</div><div class="stat-label">商品总数</div></div>
+    <div class="stat-card"><div class="stat-value">${onSale}</div><div class="stat-label">在售</div></div>
+    <div class="stat-card"><div class="stat-value">${active}</div><div class="stat-label">监控中</div></div>
+  `;
+}
+
+function renderWatchList(watches) {
+  const el = document.getElementById('watchlist');
+  document.getElementById('watchCount').textContent = watches.filter(w=>w.is_active).length;
+  if (!watches.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">📋</div>暂无监控商品</div>'; return; }
+  el.innerHTML = `<table>
+    <tr><th>商品</th><th>货号</th><th>原价</th><th>现价</th><th>状态</th><th>操作</th></tr>
+    ${watches.map(w=>`<tr>
+      <td>${w.product.name}</td>
+      <td>${w.product.product_code}</td>
+      <td><span class="original">¥${w.product.original_price}</span></td>
+      <td><span class="price ${w.product.current_price < w.product.original_price ? 'price-down' : ''}">¥${w.product.current_price}</span></td>
+      <td><span class="tag ${w.product.is_active?'tag-active':'tag-inactive'}">${w.product.is_active?'在售':'下架'}</span></td>
+      <td>
+        <button class="btn btn-danger" style="padding:4px 12px;font-size:12px" onclick="removeWatch(${w.id})">移除</button>
+        <button class="btn" style="padding:4px 12px;font-size:12px;border:1px solid #d9d9d9" onclick="showHistory(${w.product.id})">历史</button>
+      </td>
+    </tr>`).join('')}
+  </table>`;
+}
+
+async function addProduct() {
+  const code = document.getElementById('inputCode').value.trim();
+  if (!code) return;
+  const msg = document.getElementById('msg');
+  const btn = document.getElementById('btnAdd');
+  btn.disabled = true;
+  msg.className = 'msg msg-ok';
+  msg.textContent = '查询中，请稍候...';
+
+  try {
+    const res = await fetch(`${API}/api/product/add`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({product_code: code}),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      // 自动加入监控列表
+      await fetch(`${API}/api/watch/add`, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({product_code: code}),
+      });
+      msg.className = 'msg msg-ok';
+      msg.textContent = `已添加并加入监控: ${data.name} (¥${data.current_price})`;
+      document.getElementById('inputCode').value = '';
+      load();
+    } else {
+      msg.className = 'msg msg-err';
+      msg.textContent = data.detail || '添加失败';
+    }
+  } catch(e) {
+    msg.className = 'msg msg-err';
+    msg.textContent = '网络错误';
+  }
+  btn.disabled = false;
+}
+
+async function removeWatch(id) {
+  if (!confirm('确定移除监控？')) return;
+  await fetch(`${API}/api/watch/${id}`, {method:'DELETE'});
+  load();
+}
+
+async function showHistory(productId) {
+  const card = document.getElementById('historyCard');
+  const el = document.getElementById('history');
+  card.style.display = 'block';
+  el.innerHTML = '<div style="color:#8c8c8c;padding:12px 0">加载中...</div>';
+
+  try {
+    const res = await fetch(`${API}/api/product/${productId}/price_history`);
+    const data = await res.json();
+    if (!data.length) {
+      el.innerHTML = '<div style="color:#8c8c8c;padding:12px 0">暂无价格变动记录</div>';
+      return;
+    }
+    const minPrice = Math.min(...data.map(h=>h.price));
+    el.innerHTML = data.map(h => {
+      const d = new Date(h.recorded_at);
+      const dateStr = `${d.getMonth()+1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`;
+      return `<div class="history-row">
+        <span class="history-date">${dateStr}</span>
+        <span class="history-price ${h.price===minPrice?'history-low':''}">¥${h.price}</span>
+        <span style="margin-left:8px" class="tag ${h.price_type==='limited'?'tag-limited':''}">${h.price_type==='limited'?'限时':'正常'}</span>
+      </div>`;
+    }).join('');
+    card.scrollIntoView({behavior:'smooth'});
+  } catch(e) {
+    el.innerHTML = '<div style="color:#ff4d4f;padding:12px 0">加载失败</div>';
+  }
+}
+
+document.getElementById('inputCode').addEventListener('keypress', e => {
+  if (e.key === 'Enter') addProduct();
+});
+
+// ==================== 数据库管理 ====================
+
+async function loadDb() {
+  try {
+    const res = await fetch(`${API}/api/db/summary`);
+    const data = await res.json();
+    document.getElementById('dbSummary').innerHTML =
+      `商品: ${data.products} | 监控: ${data.watch_list} | 价格记录: ${data.price_history} | 通知: ${data.notifications}`;
+  } catch(e) {}
+}
+
+async function showDbTable(table) {
+  const el = document.getElementById('dbTable');
+  el.innerHTML = '<div style="color:#8c8c8c;padding:12px 0">加载中...</div>';
+
+  try {
+    const res = await fetch(`${API}/api/db/${table}`);
+    const data = await res.json();
+
+    if (!data.length) { el.innerHTML = '<div style="color:#8c8c8c;padding:12px 0">无数据</div>'; return; }
+
+    let html = '';
+
+    if (table === 'products') {
+      html = `<table><tr><th>ID</th><th>货号</th><th>名称</th><th>原价</th><th>现价</th><th>在售</th><th>操作</th></tr>`;
+      data.forEach(r => {
+        html += `<tr><td>${r.id}</td><td>${r.product_code}</td><td>${r.name}</td><td>¥${r.original_price}</td><td style="font-weight:600;color:#ff4d4f">¥${r.current_price}</td><td>${r.is_active?'✅':'❌'}</td><td><button class="btn" style="padding:2px 8px;font-size:11px;border:1px solid #1890ff;color:#1890ff" onclick="refreshPrice(${r.id},'${r.product_code}')">刷新价格</button> <button class="btn btn-danger" style="padding:2px 8px;font-size:11px" onclick="dbDelete('${table}',${r.id})">删除</button></td></tr>`;
+      });
+      html += `</table>`;
+    } else if (table === 'watch') {
+      html = `<table><tr><th>ID</th><th>商品ID</th><th>通知</th><th>激活</th><th>操作</th></tr>`;
+      data.forEach(r => {
+        html += `<tr><td>${r.id}</td><td>${r.product_id}</td><td>${r.notify_on_drop?'✅':'❌'}</td><td>${r.is_active?'✅':'❌'}</td><td><button class="btn btn-danger" style="padding:2px 8px;font-size:11px" onclick="dbDelete('${table}',${r.id})">删除</button></td></tr>`;
+      });
+      html += `</table>`;
+    } else if (table === 'price_history') {
+      html = `<table><tr><th>ID</th><th>商品ID</th><th>价格</th><th>类型</th><th>时间</th><th>操作</th></tr>`;
+      data.forEach(r => {
+        html += `<tr><td>${r.id}</td><td>${r.product_id}</td><td style="font-weight:600">¥${r.price}</td><td>${r.price_type}</td><td style="color:#8c8c8c;font-size:12px">${fmtTimeShort(r.recorded_at)}</td><td><button class="btn btn-danger" style="padding:2px 8px;font-size:11px" onclick="dbDelete('${table}',${r.id})">删除</button></td></tr>`;
+      });
+      html += `</table><div style="margin-top:12px"><button class="btn btn-danger" style="font-size:12px" onclick="dbClear('price_history')">清空价格历史</button></div>`;
+    } else if (table === 'notifications') {
+      html = `<table><tr><th>ID</th><th>商品</th><th>类型</th><th>原价</th><th>现价</th><th>时间</th><th>操作</th></tr>`;
+      data.forEach(r => {
+        html += `<tr><td>${r.id}</td><td>${r.product_id}</td><td>${r.type}</td><td>¥${r.old_price||'-'}</td><td style="color:#ff4d4f">¥${r.new_price||'-'}</td><td style="color:#8c8c8c;font-size:12px">${fmtTimeShort(r.created_at)}</td><td><button class="btn btn-danger" style="padding:2px 8px;font-size:11px" onclick="dbDelete('${table}',${r.id})">删除</button></td></tr>`;
+      });
+      html += `</table><div style="margin-top:12px"><button class="btn btn-danger" style="font-size:12px" onclick="dbClear('notifications')">清空通知记录</button></div>`;
+    }
+
+    el.innerHTML = html;
+  } catch(e) {
+    el.innerHTML = '<div style="color:#ff4d4f;padding:12px 0">加载失败</div>';
+  }
+}
+
+async function refreshPrice(productId, productCode) {
+  const msg = document.getElementById('msg');
+  msg.className = 'msg msg-ok';
+  msg.textContent = `正在刷新 ${productCode} 的价格...`;
+  try {
+    const res = await fetch(`${API}/api/product/refresh/${productId}`);
+    const data = await res.json();
+    if (data.ok) {
+      msg.className = 'msg msg-ok';
+      msg.textContent = `${productCode} 价格已更新: ¥${data.old_price} → ¥${data.new_price}`;
+    } else {
+      msg.className = 'msg msg-err';
+      msg.textContent = data.error || '刷新失败';
+    }
+    loadDb();
+    showDbTable('products');
+    load();
+  } catch(e) {
+    msg.className = 'msg msg-err';
+    msg.textContent = '刷新失败';
+  }
+}
+
+async function dbDelete(table, id) {
+  if (!confirm('确定删除？')) return;
+  // 产品表用单数路径，其他用复数
+  const path = table === 'products' ? 'product' : table;
+  await fetch(`${API}/api/db/${path}/${id}`, {method:'DELETE'});
+  showDbTable(table);
+  loadDb();
+}
+
+async function dbClear(table) {
+  if (!confirm(`确定清空${table === 'price_history' ? '价格历史' : '通知记录'}？`)) return;
+  await fetch(`${API}/api/db/clear/${table}`, {method:'DELETE'});
+  showDbTable(table);
+  loadDb();
+}
+
+// ==================== 操作日志 ====================
+
+async function loadLogs() {
+  const el = document.getElementById('logs');
+  try {
+    const res = await fetch(`${API}/api/logs`);
+    const data = await res.json();
+    if (!data.length) { el.innerHTML = '<div style="color:#8c8c8c;padding:12px 0;font-size:13px">暂无日志</div>'; return; }
+    el.innerHTML = data.map(r => {
+      let color = '#333';
+      if (r.action.includes('add')) color = '#52c41a';
+      else if (r.action.includes('remove') || r.action.includes('delete')) color = '#ff4d4f';
+      else if (r.action.includes('refresh') || r.action.includes('price') || r.action.includes('crawl')) color = '#1890ff';
+      return `<div style="display:flex;align-items:center;padding:6px 0;border-bottom:1px solid #f5f5f5;font-size:13px">
+        <span style="color:#8c8c8c;width:150px;flex-shrink:0">${fmtTime(r.created_at)}</span>
+        <span style="color:${color};width:90px;flex-shrink:0;font-weight:500">${r.action}</span>
+        <span style="flex:1">${r.detail}</span>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    el.innerHTML = '<div style="color:#8c8c8c;padding:12px 0;font-size:13px">加载失败</div>';
+  }
+}
+
+async function clearLogs() {
+  if (!confirm('确定清空所有日志？')) return;
+  await fetch(`${API}/api/logs/clear`, {method:'DELETE'});
+  loadLogs();
+}
+
+loadDb();
+loadLogs();
+load();
+</script>
+</body>
+</html>

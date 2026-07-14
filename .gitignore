@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+data.db
+*.db
+.env
+*.png
+*.jpg
+.vscode/
+.idea/
+data/

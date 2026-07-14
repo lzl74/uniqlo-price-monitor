@@ -1,0 +1,13 @@
+version: "3.3"
+
+services:
+  backend:
+    build: .
+    container_name: uniqlo-monitor
+    restart: always
+    ports:
+      - "17523:8000"
+    volumes:
+      - ./data:/data
+    env_file:
+      - .env
